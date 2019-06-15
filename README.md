@@ -7,7 +7,16 @@ Used for managing credentials for the [go-oneroster](https://github.com/fffnite/
 `-new` Creates a new set of credentials  
 `-tag` Used with `-new`, attaches human readable tag to the credential  
 `-list` lists all credentials held  
+`-remove` removes a credential from the store based off client ID
 
-### TODO
+## Build
 
-`-remove` removes a credential from the store
+```
+make build
+```
+
+### Usage
+
+```
+gorcli -new -tag "John Smith"
+```
