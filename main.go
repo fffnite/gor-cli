@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/Masterminds/squirrel"
@@ -25,8 +26,8 @@ var (
 )
 
 type Result struct {
-	Client_Id string
-	Tag       string
+	Client_Id string `json:"client_id"`
+	Tag       string `json:"tag"`
 }
 
 func main() {
@@ -115,7 +116,12 @@ func list(db *sql.DB) {
 		}
 		results = append(results, r)
 	}
-	fmt.Printf("list: %v", results)
+	b, err := json.Marshal(results)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(string(b))
 }
 
 func connectDatabase() *sql.DB {
