@@ -18,9 +18,10 @@ var (
 		client_secret_hash BLOB,
 		tag TEXT
 		)`
-	flagNew  = flag.Bool("new", false, "Create new creds")
-	flagTag  = flag.String("tag", "notSet", "human readable tag for new cred")
-	flagList = flag.Bool("list", false, "List existing credentials")
+	flagNew    = flag.Bool("new", false, "Create new creds")
+	flagTag    = flag.String("tag", "notSet", "human readable tag for new cred")
+	flagList   = flag.Bool("list", false, "List existing credentials")
+	flagRemove = flag.String("remove", "", "Creds to remove based off ID")
 )
 
 type Result struct {
@@ -39,6 +40,9 @@ func main() {
 	}
 	if *flagList {
 		list(db)
+	}
+	if *flagRemove != "" {
+		remove(db, *flagRemove)
 	}
 }
 
@@ -120,4 +124,16 @@ func ConnectDatabase() *sql.DB {
 		fmt.Println(err)
 	}
 	return conn
+}
+
+func remove(db *sql.DB, s string) {
+	_, err := squirrel.
+		Delete("").
+		From("creds").
+		Where("client_id = ?", s).
+		RunWith(db).
+		Exec()
+	if err != nil {
+		fmt.Println(err)
+	}
 }
