@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	CreateTable = `CREATE TABLE IF NOT EXISTS creds (
+	createTable = `CREATE TABLE IF NOT EXISTS creds (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		client_id TEXT,
 		client_secret_hash BLOB,
@@ -31,12 +31,12 @@ type Result struct {
 
 func main() {
 
-	db := ConnectDatabase()
+	db := connectDatabase()
 	defer db.Close()
-	db.Exec(CreateTable)
+	db.Exec(createTable)
 	flag.Parse()
 	if *flagNew {
-		New(db, *flagTag)
+		create(db, *flagTag)
 	}
 	if *flagList {
 		list(db)
@@ -46,7 +46,7 @@ func main() {
 	}
 }
 
-func New(db *sql.DB, tag string) {
+func create(db *sql.DB, tag string) {
 	u, err := randomHex(25)
 	if err != nil {
 		fmt.Println(err)
@@ -118,7 +118,7 @@ func list(db *sql.DB) {
 	fmt.Printf("list: %v", results)
 }
 
-func ConnectDatabase() *sql.DB {
+func connectDatabase() *sql.DB {
 	conn, err := sql.Open("sqlite3", "credstore")
 	if err != nil {
 		fmt.Println(err)
