@@ -1,78 +1,104 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"flag"
 	"fmt"
-	"github.com/Masterminds/squirrel"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
+	flag "github.com/spf13/pflag"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
+	"os"
+	"time"
 )
 
 var (
-	createTable = `CREATE TABLE IF NOT EXISTS creds (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		client_id TEXT,
-		client_secret_hash BLOB,
-		tag TEXT
-		)`
-	flagNew    = flag.Bool("new", false, "Create new creds")
-	flagTag    = flag.String("tag", "notSet", "human readable tag for new cred")
-	flagList   = flag.Bool("list", false, "List existing credentials")
-	flagRemove = flag.String("remove", "", "Creds to remove based off ID")
+	flagList = flag.StringP(
+		"list",
+		"l",
+		"",
+		"list existing credentials or id of a specific description",
+	)
+	flagNew = flag.StringP(
+		"new",
+		"n",
+		"",
+		"generate new credentials with human readable description",
+	)
+	flagRemove = flag.StringP(
+		"remove",
+		"r",
+		"",
+		"Remove credentials by username",
+	)
+	flagMongo = flag.StringP(
+		"mongo-uri",
+		"m",
+		"mongodb://localhost:27017",
+		"MongoDB instance to connect to (required)",
+	)
 )
 
-type Result struct {
-	Client_Id string `json:"client_id"`
-	Tag       string `json:"tag"`
-}
-
 func main() {
-
-	db := connectDatabase()
-	defer db.Close()
-	db.Exec(createTable)
 	flag.Parse()
-	if *flagNew {
-		create(db, *flagTag)
+	if *flagMongo == "" {
+		log.Error("No database uri provided with -m")
+		os.Exit(2)
 	}
-	if *flagList {
-		list(db)
+	client := connectDb()
+	c := client.Database("credentials").Collection("clients")
+	if *flagNew != "" {
+		create(c)
+	}
+	if *flagList != "" {
+		list(c)
 	}
 	if *flagRemove != "" {
-		remove(db, *flagRemove)
+		remove(c, *flagRemove)
 	}
 }
 
-func create(db *sql.DB, tag string) {
-	u, err := randomHex(25)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+type Creds struct {
+	ClientId     string `json:"clientId"`
+	ClientSecret string `json:"clientSecret,omitempty"`
+	Description  string `json:"description"`
+}
+
+func create(c *mongo.Collection) {
+
 	p, err := randomHex(32)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err)
 		return
 	}
-	fmt.Println("IMPORTANT: store somewhere safe as this is not recoverable")
-	fmt.Printf("client_id: %v \n", u)
-	fmt.Printf("client_secret: %v \n", p)
-	en := encrypt(p)
-	_, err = squirrel.
-		Insert("creds").
-		Columns("client_id", "client_secret_hash", "tag").
-		Values(u, en, tag).
-		RunWith(db).
-		Exec()
+	cred := Creds{
+		ClientId:     uuid.New().String(),
+		ClientSecret: p,
+		Description:  *flagNew,
+	}
+	b, err := json.Marshal(cred)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-
+	fmt.Println(string(b))
+	en := encrypt(p)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err = c.InsertOne(
+		ctx,
+		bson.D{{"clientId", cred.ClientId},
+			{"clientSecret", en},
+			{"description", cred.Description}},
+	)
+	if err != nil {
+		log.Error(err)
+	}
 	return
 }
 
@@ -96,27 +122,28 @@ func randomHex(n int) (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-func list(db *sql.DB) {
-	rows, err := squirrel.
-		Select("client_id", "tag").
-		From("creds").
-		OrderBy("id").
-		RunWith(db).
-		Query()
+func list(c *mongo.Collection) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cur, err := c.Find(
+		ctx,
+		bson.D{{"description", *flagList}},
+		options.Find().SetProjection(bson.D{{"clientSecret", 0}, {"_id", 0}}),
+	)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err)
 		return
 	}
-	var results []Result
-	for rows.Next() {
-		var r Result
-		err := rows.Scan(&r.Client_Id, &r.Tag)
+	var creds []Creds
+	for cur.Next(ctx) {
+		var cred Creds
+		err := cur.Decode(&cred)
 		if err != nil {
-			fmt.Println(err)
+			log.Error(err)
 		}
-		results = append(results, r)
+		creds = append(creds, cred)
 	}
-	b, err := json.Marshal(results)
+	b, err := json.Marshal(creds)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -124,22 +151,30 @@ func list(db *sql.DB) {
 	fmt.Println(string(b))
 }
 
-func connectDatabase() *sql.DB {
-	conn, err := sql.Open("sqlite3", "credstore")
+// open connection to mongo db
+func connectDb() *mongo.Client {
+	client, err := mongo.NewClient(options.Client().ApplyURI(*flagMongo))
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err)
 	}
-	return conn
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	err = client.Connect(ctx)
+	if err != nil {
+		log.Error(err)
+	}
+	return client
 }
 
-func remove(db *sql.DB, s string) {
-	_, err := squirrel.
-		Delete("").
-		From("creds").
-		Where("client_id = ?", s).
-		RunWith(db).
-		Exec()
+func remove(c *mongo.Collection, s string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	res, err := c.DeleteOne(
+		ctx,
+		bson.D{{"clientId", *flagRemove}},
+	)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err)
 	}
+	log.Info(res)
 }
