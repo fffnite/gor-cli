@@ -4,11 +4,11 @@ Used for managing credentials for the [go-oneroster](https://github.com/fffnite/
 
 ## Arguments
 
-`--new` Creates a new set of credentials with a description
+`--new` Creates a new set of credentials with a description  
 `--list` lists all credentials held  
-`--remove` removes a credential from the store based off client ID
-`--mongo-uri` connection to a mongodb instance
-`--help` display info on parameters
+`--remove` removes a credential from the store based off client ID  
+`--mongo-uri` connection to a mongodb instance  
+`--help` display info on parameters  
 
 ## Build
 
