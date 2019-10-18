@@ -13,7 +13,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
-	"os"
 	"time"
 )
 
@@ -46,20 +45,15 @@ var (
 
 func main() {
 	flag.Parse()
-	if *flagMongo == "" {
-		log.Error("No database uri provided with -m")
-		os.Exit(2)
-	}
 	client := connectDb()
 	c := client.Database("credentials").Collection("clients")
-	if *flagNew != "" {
+	switch {
+	case *flagNew != "":
 		create(c)
-	}
-	if *flagList != "" {
+	case *flagRemove != "":
+		remove(c)
+	default:
 		list(c)
-	}
-	if *flagRemove != "" {
-		remove(c, *flagRemove)
 	}
 }
 
@@ -125,9 +119,13 @@ func randomHex(n int) (string, error) {
 func list(c *mongo.Collection) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	filter := bson.D{}
+	if *flagList != "" {
+		filter = bson.D{{"description", *flagList}}
+	}
 	cur, err := c.Find(
 		ctx,
-		bson.D{{"description", *flagList}},
+		filter,
 		options.Find().SetProjection(bson.D{{"clientSecret", 0}, {"_id", 0}}),
 	)
 	if err != nil {
@@ -166,7 +164,7 @@ func connectDb() *mongo.Client {
 	return client
 }
 
-func remove(c *mongo.Collection, s string) {
+func remove(c *mongo.Collection) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	res, err := c.DeleteOne(
