@@ -1,2 +1,2 @@
 build:
-	go build -o "gorcli"
+	go build -o "goors-cli"
