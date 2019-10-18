@@ -87,7 +87,7 @@ func create(c *mongo.Collection) {
 	_, err = c.InsertOne(
 		ctx,
 		bson.D{{"clientId", cred.ClientId},
-			{"clientSecret", en},
+			{"clientSecret", string(en)},
 			{"description", cred.Description}},
 	)
 	if err != nil {
@@ -98,7 +98,7 @@ func create(c *mongo.Collection) {
 
 func encrypt(s string) []byte {
 	b := []byte(s)
-	en, err := bcrypt.GenerateFromPassword(b, 10)
+	en, err := bcrypt.GenerateFromPassword(b, 12)
 	if err != nil {
 		fmt.Println(err)
 		n := make([]byte, 0)
