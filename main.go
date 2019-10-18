@@ -21,7 +21,7 @@ var (
 		"list",
 		"l",
 		"",
-		"list existing credentials or id of a specific description",
+		"list existing credentials based on description",
 	)
 	flagNew = flag.StringP(
 		"new",
@@ -33,7 +33,7 @@ var (
 		"remove",
 		"r",
 		"",
-		"Remove credentials by username",
+		"Remove credentials by id",
 	)
 	flagMongo = flag.StringP(
 		"mongo-uri",
